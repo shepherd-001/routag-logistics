@@ -108,7 +108,6 @@ def staged_delivery(delivery, business1_token, courier1_token):
         )
         if stage == DeliveryStage.DRAFT:
             return draft
-        print(transitions)
         for status, transition, token in transitions:
             response = transition(draft.id, token)
             assert response.status_code == 200, f"Setup for {status} returned HTTP {response.status_code}"

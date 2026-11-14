@@ -8,6 +8,27 @@ def response_data(response, expected=200):
     return response.json()
 
 
+def assert_api_error(
+    response,
+    *,
+    status_code: int | tuple[int, ...],
+    code: str,
+    message: str,
+    fields: list[str] | None = None,
+):
+    assert_status_code(response, status_code)
+    error = response.json().get("error")
+    assert isinstance(error, dict), "Expected an 'error' object in the response"
+    assert error.get("code") == code, f"Expected error code {code!r}, got {error.get('code')!r}"
+    assert error.get("message") == message, (
+        f"Expected error message {message!r}, got {error.get('message')!r}"
+    )
+    if fields is not None:
+        assert error.get("fields") == fields, (
+            f"Expected field errors {fields!r}, got {error.get('fields')!r}"
+        )
+
+
 def validate_schema(items: dict, required_keys: list):
     for key in required_keys:
         assert key in items, f"Missing key '{key}'"

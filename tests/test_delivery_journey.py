@@ -9,7 +9,7 @@ from apis.delivery import delivery_api
 from apis.wallet import wallet_api
 from apis.webhooks import webhook_api
 from utils.constant_data import DeliveryStage
-from utils.custom_assertions import assert_status_code
+from utils.custom_assertions import assert_api_error, assert_status_code
 from utils.data_factory.delivery_data_factory import DeliveryDataFactory
 from utils.test_utils import TestUtils
 
@@ -55,11 +55,7 @@ def test_invalid_quote_is_rejected(business1_token, overrides, error):
     payload = DeliveryDataFactory.generate_delivery_quote(overrides)
     response = delivery_api.get_delivery_quote(payload, business1_token)
 
-    assert_status_code(response, 422)
-    response_error = response.json()["error"]
-    assert response_error["code"] == "validation_error"
-    assert response_error["message"] == "Invalid request"
-    assert response_error["fields"] == [error]
+    assert_api_error(response, status_code=422, code="validation_error", message="Invalid request", fields=[error])
 
 
 def test_delivery_journey_settles_fee_and_updates_tracking(delivery, wallet, business1_token, courier1_token):
@@ -143,7 +139,8 @@ def test_business_can_cancel_before_completion(staged_delivery, wallet, business
     assert ledger(draft.id, business1_token) == expected
     assert not ledger(draft.id, courier1_token)
     accept_response = courier_api.accept_delivery(draft.id, courier1_token)
-    assert_status_code(accept_response, (403, 404, 409))
+
+    assert_api_error(accept_response, status_code=409, code="invalid_status", message="Cannot accept a cancelled delivery")
 
 
 @pytest.mark.parametrize("attempt", ["before_pickup", "wrong", "blank", "oversized"])
@@ -157,7 +154,8 @@ def test_invalid_completion_preserves_the_hold(staged_delivery, wallet, business
 
     response = courier_api.deliver_delivery(draft.id, courier1_token, code=code)
 
-    assert_status_code(response, (400, 409, 422))
+    assert_api_error(response, status_code=400, code="invalid_code", message="Delivery code is incorrect")
+
     delivery_response = delivery_api.get_delivery(draft.id, business1_token)
     assert_status_code(delivery_response, 200)
     assert delivery_response.json()["status"] == stage
@@ -170,7 +168,7 @@ def test_acceptance_retry_creates_only_one_hold(staged_delivery, wallet, busines
     draft = staged_delivery(DeliveryStage.ASSIGNED)
     held = wallet(business1_token)
     retry = courier_api.accept_delivery(draft.id, courier1_token)
-    assert_status_code(retry, (200, 409))
+    assert_status_code(retry, 200)
     assert ledger(draft.id, business1_token) == [("hold", draft.fee)]
     assert wallet(business1_token) == held
 
@@ -189,7 +187,7 @@ def test_completed_delivery_settlement_is_final(staged_delivery, wallet, busines
 
     if action == "retry_delivery":
         response = courier_api.deliver_delivery(draft.id, courier1_token, code=code)
-        assert_status_code(response, (200, 409))
+        assert_api_error(response, status_code=409, code="invalid_status", message="Cannot accept a cancelled delivery")
     else:
         response = delivery_api.cancel_delivery(draft.id, business1_token)
         assert_status_code(response, (403, 409))

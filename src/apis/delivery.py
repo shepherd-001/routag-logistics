@@ -5,9 +5,6 @@ class DeliveriesApiClient(ApiClient):
     def get_delivery_quote(self, payload, auth_token):
         return self.post("/deliveries/quote", json=payload, auth_token=auth_token)
 
-    def list_deliveries(self, auth_token):
-        return self.get("/deliveries", auth_token=auth_token)
-
     def create_draft_delivery(self, payload, auth_token):
         return self.post("/deliveries", json=payload, auth_token=auth_token)
 
