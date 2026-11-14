@@ -6,6 +6,7 @@ from apis.delivery import delivery_api
 from apis.wallet import wallet_api
 from config import settings
 from utils.constant_data import DeliveryStage
+from utils.custom_assertions import assert_status_code
 from utils.data_factory.delivery_data_factory import DeliveryDataFactory
 from utils.fixture_models import (
     DeliveryContact, DeliveryHistoryEntry, DeliveryInfo, DeliveryPackage, DeliveryQuoteInfo, WalletInfo,
@@ -73,6 +74,21 @@ def wallet():
     return _resolve_wallet_details
 
 
+def _delivery_info(data):
+    return DeliveryInfo(
+        id=data["id"],
+        business_id=data["business_id"],
+        status=data["status"],
+        fee=data["fee"],
+        currency=data["currency"],
+        pickup=DeliveryContact(**data["pickup"]),
+        drop_off=DeliveryContact(**data["dropoff"]),
+        package=DeliveryPackage(**data["package"]),
+        courier_id=data["courier_id"],
+        history=tuple(DeliveryHistoryEntry(**entry) for entry in data["history"]),
+    )
+
+
 @pytest.fixture
 def delivery():
     def _create_delivery(auth_token: str, overrides=None):
@@ -86,34 +102,32 @@ def delivery():
         delivery_response = delivery_api.create_draft_delivery(delivery_quote_payload, auth_token)
 
         assert delivery_response.status_code == 201, "Failed to create draft delivery"
-        data = delivery_response.json()
-
-        return DeliveryInfo(id=data["id"], business_id=data["business_id"], status=data["status"], fee=data["fee"],
-                            currency=data["currency"], pickup=DeliveryContact(**data["pickup"]),
-                            drop_off=DeliveryContact(**data["dropoff"]), package=DeliveryPackage(**data["package"]),
-                            courier_id=data["courier_id"],
-                            history=tuple(DeliveryHistoryEntry(**entry) for entry in data["history"]))
+        return _delivery_info(delivery_response.json())
 
     return _create_delivery
 
 
 @pytest.fixture
 def staged_delivery(delivery, business1_token, courier1_token):
+    transitions = (
+        (DeliveryStage.PENDING, delivery_api.publish_draft_delivery, business1_token),
+        (DeliveryStage.ASSIGNED, courier_api.accept_delivery, courier1_token),
+        (DeliveryStage.PICKED_UP, courier_api.pickup_delivery, courier1_token),
+    )
+
     def create(stage):
+        if stage != DeliveryStage.DRAFT and stage not in [status for status, _, _ in transitions]:
+            raise ValueError(f"Unknown delivery stage: {stage}")
+
         draft = delivery(business1_token, {"package": {"weight_kg": 1}})
-        transitions = (
-            (DeliveryStage.PENDING, delivery_api.publish_draft_delivery, business1_token),
-            (DeliveryStage.ASSIGNED, courier_api.accept_delivery, courier1_token),
-            (DeliveryStage.PICKED_UP, courier_api.pickup_delivery, courier1_token),
-        )
         if stage == DeliveryStage.DRAFT:
             return draft
         for status, transition, token in transitions:
             response = transition(draft.id, token)
-            assert response.status_code == 200, f"Setup for {status} returned HTTP {response.status_code}"
-            assert response.json()["status"] == status
+            assert_status_code(response, 200)
+            data = response.json()
+            assert data["status"] == status
             if stage == status:
-                return draft
-        raise ValueError(f"Unknown delivery stage: {stage}")
+                return _delivery_info(data)
 
     return create
