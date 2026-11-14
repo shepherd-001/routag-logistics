@@ -11,8 +11,12 @@ class CourierApiClient(ApiClient):
     def pickup_delivery(self, delivery_id, auth_token):
         return self.post(f"/courier/deliveries/{delivery_id}/pickup", auth_token=auth_token)
 
-    def deliver_delivery(self, delivery_id, auth_token):
-        return self.post(f"/courier/deliveries/{delivery_id}/deliver", auth_token=auth_token)
+    def deliver_delivery(self, delivery_id, auth_token, *, code):
+        return self.post(
+            f"/courier/deliveries/{delivery_id}/deliver",
+            auth_token=auth_token,
+            json={"code": code},
+        )
 
     def cancel_delivery(self, delivery_id, auth_token):
         return self.post(f"/courier/deliveries/{delivery_id}/cancel", auth_token=auth_token)

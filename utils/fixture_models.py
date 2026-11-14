@@ -40,3 +40,9 @@ class DeliveryInfo:
     package: DeliveryPackage | None = None
     courier_id: str | None = None
     history: tuple[DeliveryHistoryEntry, ...] = ()
+
+
+@dataclass(frozen=True)
+class WalletInfo:
+    balance: int | float | None = None
+    held: int | float | None = None
