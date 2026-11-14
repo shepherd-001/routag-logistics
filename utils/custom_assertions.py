@@ -3,8 +3,8 @@ def assert_status_code(response, expected_code: int | tuple[int, ...]):
     assert response.status_code in expected_codes, f"Expected {expected_code}, but got {response.status_code}"
 
 
-def response_data(response, expected=200):
-    assert_status_code(response, expected)
+def response_data(response, expected_code=200):
+    assert_status_code(response, expected_code)
     return response.json()
 
 

@@ -6,16 +6,6 @@ from config import fake
 
 class TestUtils:
     @staticmethod
-    def generate_text(number_of_characters: int = 0) -> str:
-        if number_of_characters == 0:
-            return fake.text()
-
-        text = ""
-        while len(text) < number_of_characters:
-            text += fake.sentence() + " "
-        return text[:number_of_characters]
-
-    @staticmethod
     def generate_phone_number() -> str:
         prefixes = ["070", "080", "081", "090", "091"]
         prefix = random.choice(prefixes)

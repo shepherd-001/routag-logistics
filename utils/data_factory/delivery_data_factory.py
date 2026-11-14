@@ -17,7 +17,7 @@ class DeliveryDataFactory:
                 "address": fake.address()
             },
             "package": {
-                "description": TestUtils.generate_text(200),
+                "description": fake.sentence(nb_words=6),
                 "weight_kg": fake.random_int(min=10, max=500) / 100,
             },
         }

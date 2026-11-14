@@ -5,3 +5,9 @@ class DeliveryStage:
     PICKED_UP = "picked_up"
     DELIVERED = "delivered"
     CANCELLED = "cancelled"
+
+
+class LedgerEntry:
+    HOLD = "hold"
+    CHARGE = "charge"
+    PAYOUT = "payout"
