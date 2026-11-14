@@ -12,11 +12,15 @@ class Settings:
     env: str
     base_url: str
 
-    business_email: str
-    business_password: str
+    business1_email: str
+    business1_password: str
+    courier1_email: str
+    courier1_password: str
 
-    courier_email: str
-    courier_password: str
+    business2_email: str
+    business2_password: str
+    courier2_email: str
+    courier2_password: str
 
 
 def _find_project_root() -> Path:
@@ -26,10 +30,14 @@ def _find_project_root() -> Path:
 def _validate_required_values(values: dict) -> None:
     required_keys = [
         "BASE_URL",
-        "BUSINESS_EMAIL",
-        "BUSINESS_PASSWORD",
-        "COURIER_EMAIL",
-        "COURIER_PASSWORD",
+        "BUSINESS1_EMAIL",
+        "BUSINESS1_PASSWORD",
+        "COURIER1_EMAIL",
+        "COURIER1_PASSWORD",
+        "BUSINESS2_EMAIL",
+        "BUSINESS2_PASSWORD",
+        "COURIER2_EMAIL",
+        "COURIER2_PASSWORD",
     ]
 
     missing_keys = [key for key in required_keys
@@ -66,8 +74,12 @@ def get_settings() -> Settings:
     return Settings(
         env=env,
         base_url=base_url,
-        business_email=values["BUSINESS_EMAIL"].strip(),
-        business_password=values["BUSINESS_PASSWORD"].strip(),
-        courier_email=values["COURIER_EMAIL"].strip(),
-        courier_password=values["COURIER_PASSWORD"].strip(),
+        business1_email=values["BUSINESS1_EMAIL"].strip(),
+        business1_password=values["BUSINESS1_PASSWORD"].strip(),
+        courier1_email=values["COURIER1_EMAIL"].strip(),
+        courier1_password=values["COURIER1_PASSWORD"].strip(),
+        business2_email=values["BUSINESS2_EMAIL"].strip(),
+        business2_password=values["BUSINESS2_PASSWORD"].strip(),
+        courier2_email=values["COURIER2_EMAIL"].strip(),
+        courier2_password=values["COURIER2_PASSWORD"].strip(),
     )
