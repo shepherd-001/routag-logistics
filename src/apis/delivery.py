@@ -2,7 +2,7 @@ from api_client import ApiClient
 
 
 class DeliveriesApiClient(ApiClient):
-    def get_a_delivery_quote(self, payload, auth_token):
+    def get_delivery_quote(self, payload, auth_token):
         return self.post("/deliveries/quote", json=payload, auth_token=auth_token)
 
     def list_deliveries(self, auth_token):
@@ -27,4 +27,4 @@ class DeliveriesApiClient(ApiClient):
         return self.post(f"/deliveries/{delivery_id}/cancel", auth_token=auth_token)
 
 
-deliveries_api = DeliveriesApiClient()
+delivery_api = DeliveriesApiClient()

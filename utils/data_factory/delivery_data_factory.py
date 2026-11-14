@@ -4,7 +4,7 @@ from utils.test_utils import TestUtils
 
 class DeliveryDataFactory:
     @staticmethod
-    def generate_delivery__quote_data(overrides=None):
+    def generate_delivery_quote(overrides=None, quote_id=None):
         delivery_data = {
             "pickup": {
                 "name": fake.name(),
@@ -17,10 +17,13 @@ class DeliveryDataFactory:
                 "address": fake.address()
             },
             "package": {
-                "description": fake.sentence(nb_words=5),
-                "weight_kg": fake.pydecimal(right_digits=2, min_value=0, max_value=500 ),
-            }
+                "description": TestUtils.generate_text(200),
+                "weight_kg": fake.random_int(min=10, max=500) / 100,
+            },
         }
+
+        if quote_id is not None:
+            delivery_data["quote_id"] = quote_id
 
         if overrides:
             return TestUtils.deep_merge(delivery_data, overrides)
