@@ -27,16 +27,6 @@ def snapshot(delivery_id, wallet, token):
     return wallet(token), ledger_entries(delivery_id, token)
 
 
-def ledger(delivery_id, token):
-    data_response = wallet_api.get_wallet_transactions(token)
-    data = response_data(data_response)
-    return sorted(
-        (entry["type"], entry["amount"])
-        for entry in data["data"]
-        if entry["reference"] == delivery_id
-    )
-
-
 def delivery_code(delivery_id, token):
     code_response = delivery_api.get_delivery_code(delivery_id, token)
     return response_data(code_response)["code"]
@@ -195,21 +185,20 @@ def test_invalid_completion_preserves_the_hold(staged_delivery, wallet, business
     delivery_response = delivery_api.get_delivery(target.id, business1_token)
     assert response_data(delivery_response)["status"] == stage
     assert wallet(business1_token) == before
-    assert ledger(target.id, business1_token) == [("hold", target.fee)]
-    assert not ledger(target.id, courier1_token)
-
-    # assert snapshot(target.id, wallet, business1_token) == before
-    # assert_ledger(target.id, courier1_token)
+    assert_ledger(target.id, business1_token, (LedgerEntry.HOLD, target.fee))
+    assert_ledger(target.id, courier1_token)
 
 
 def test_repeated_acceptance_creates_only_one_hold(staged_delivery, wallet, business1_token, courier1_token):
     assigned = staged_delivery(DeliveryStage.ASSIGNED)
     before = snapshot(assigned.id, wallet, business1_token)
 
-    response_data(courier_api.accept_delivery(assigned.id, courier1_token))
+    assert before[1] == [(LedgerEntry.HOLD, assigned.fee)]
 
+    response = courier_api.accept_delivery(assigned.id, courier1_token)
+
+    assert_status_code(response, 200)
     assert snapshot(assigned.id, wallet, business1_token) == before
-    assert_ledger(assigned.id, business1_token, (LedgerEntry.HOLD, assigned.fee))
 
 
 @pytest.mark.parametrize("action", ["retry_delivery", "cancel"])
@@ -219,8 +208,8 @@ def test_completed_delivery_settlement_is_final(staged_delivery, wallet, busines
     completion_response = courier_api.deliver_delivery(draft.id, courier1_token, code=code)
     assert_status_code(completion_response, 200)
     settled_wallet = wallet(business1_token)
-    business_entries = ledger(draft.id, business1_token)
-    courier_entries = ledger(draft.id, courier1_token)
+    business_entries = ledger_entries(draft.id, business1_token)
+    courier_entries = ledger_entries(draft.id, courier1_token)
     assert business_entries == [("charge", draft.fee), ("hold", draft.fee)]
     assert courier_entries == [("payout", TestUtils.calculate_courier_fee(draft.fee))]
 
@@ -233,141 +222,54 @@ def test_completed_delivery_settlement_is_final(staged_delivery, wallet, busines
 
     delivery_response = delivery_api.get_delivery(draft.id, business1_token)
     assert response_data(delivery_response)["status"] == DeliveryStage.DELIVERED
-    assert ledger(draft.id, business1_token) == business_entries
-    assert ledger(draft.id, courier1_token) == courier_entries
+    assert ledger_entries(draft.id, business1_token) == business_entries
+    assert ledger_entries(draft.id, courier1_token) == courier_entries
     assert wallet(business1_token) == settled_wallet
 
 
-# Cross business authorization
+@pytest.mark.parametrize("action, stage", [
+    pytest.param(delivery_api.get_delivery, DeliveryStage.ASSIGNED, id="view-delivery"),
+    pytest.param(delivery_api.get_delivery_code, DeliveryStage.ASSIGNED, id="view-code"),
+    pytest.param(delivery_api.track_delivery, DeliveryStage.ASSIGNED, id="track"),
+    pytest.param(delivery_api.publish_draft_delivery, DeliveryStage.DRAFT, id="publish"),
+    pytest.param(delivery_api.cancel_delivery, DeliveryStage.ASSIGNED, id="cancel"),
+])
+def test_other_business_is_denied_access(
+    staged_delivery, wallet, user_details, business1_token, business2_token, action, stage,
+):
+    delivery = staged_delivery(stage)
+    assert user_details(business2_token)["id"] != delivery.business_id
+    before = snapshot(delivery.id, wallet, business1_token)
 
-def test_other_business_cannot_view_delivery(staged_delivery, wallet, user_details, business1_token, business2_token):
-    delivery = staged_delivery(DeliveryStage.ASSIGNED)
-    second_business = user_details(business2_token)
-    assert second_business["id"] != delivery.business_id
-    before = wallet(business1_token), ledger(delivery.id, business1_token)
+    response = action(delivery.id, business2_token)
 
-    response = delivery_api.get_delivery(delivery.id, business2_token)
     assert_api_error(response, status_code=404, code="not_found", message="Delivery not found")
-
-    delivery_response = delivery_api.get_delivery(delivery.id, business1_token)
-    assert response_data(delivery_response)["status"] == DeliveryStage.ASSIGNED
-    assert (wallet(business1_token), ledger(delivery.id, business1_token)) == before
-
-
-def test_other_business_cannot_view_delivery_code(staged_delivery, wallet, user_details, business1_token,
-                                                  business2_token):
-    delivery = staged_delivery(DeliveryStage.ASSIGNED)
-    second_business = user_details(business2_token)
-    assert second_business["id"] != delivery.business_id
-    before = wallet(business1_token), ledger(delivery.id, business1_token)
-
-    response = delivery_api.get_delivery_code(delivery.id, business2_token)
-    assert_api_error(response, status_code=404, code="not_found", message="Delivery not found")
-
-    delivery_response = delivery_api.get_delivery(delivery.id, business1_token)
-    assert response_data(delivery_response)["status"] == DeliveryStage.ASSIGNED
-    assert (wallet(business1_token), ledger(delivery.id, business1_token)) == before
+    owner_response = delivery_api.get_delivery(delivery.id, business1_token)
+    assert response_data(owner_response)["status"] == stage
+    assert snapshot(delivery.id, wallet, business1_token) == before
 
 
-def test_other_business_cannot_track_delivery(staged_delivery, wallet, user_details, business1_token, business2_token):
-    delivery = staged_delivery(DeliveryStage.ASSIGNED)
-    second_business = user_details(business2_token)
-    assert second_business["id"] != delivery.business_id
-    before = wallet(business1_token), ledger(delivery.id, business1_token)
-
-    response = delivery_api.track_delivery(delivery.id, business2_token)
-    assert_api_error(response, status_code=404, code="not_found", message="Delivery not found")
-
-    delivery_response = delivery_api.get_delivery(delivery.id, business1_token)
-    assert response_data(delivery_response)["status"] == DeliveryStage.ASSIGNED
-    assert (wallet(business1_token), ledger(delivery.id, business1_token)) == before
-
-
-def test_other_business_cannot_publish_draft_delivery(staged_delivery, wallet, user_details, business1_token,
-                                                      business2_token):
-    delivery = staged_delivery(DeliveryStage.DRAFT)
-    second_business = user_details(business2_token)
-    assert second_business["id"] != delivery.business_id
-    before = wallet(business1_token), ledger(delivery.id, business1_token)
-
-    response = delivery_api.publish_draft_delivery(delivery.id, business2_token)
-    assert_api_error(response, status_code=404, code="not_found", message="Delivery not found")
-
-    delivery_response = delivery_api.get_delivery(delivery.id, business1_token)
-    assert response_data(delivery_response)["status"] == DeliveryStage.DRAFT
-    assert (wallet(business1_token), ledger(delivery.id, business1_token)) == before
-
-
-def test_other_business_cannot_cancel_delivery(staged_delivery, wallet, user_details, business1_token, business2_token):
-    delivery = staged_delivery(DeliveryStage.ASSIGNED)
-    second_business = user_details(business2_token)
-    assert second_business["id"] != delivery.business_id
-    before = wallet(business1_token), ledger(delivery.id, business1_token)
-
-    response = delivery_api.cancel_delivery(delivery.id, business2_token)
-    assert_api_error(response, status_code=404, code="not_found", message="Delivery not found")
-
-    delivery_response = delivery_api.get_delivery(delivery.id, business1_token)
-    assert response_data(delivery_response)["status"] == DeliveryStage.ASSIGNED
-    assert (wallet(business1_token), ledger(delivery.id, business1_token)) == before
-
-
-# cross courier authorization
-def test_other_courier_cannot_accept_delivery(staged_delivery, wallet, user_details, business1_token, courier2_token):
+@pytest.mark.parametrize("action", [
+    pytest.param(courier_api.accept_delivery, id="accept"),
+    pytest.param(courier_api.pickup_delivery, id="pickup"),
+    pytest.param(courier_api.cancel_delivery, id="cancel"),
+])
+def test_other_courier_cannot_take_over_delivery(
+    staged_delivery, wallet, user_details, business1_token, courier2_token, action,
+):
     assigned = staged_delivery(DeliveryStage.ASSIGNED)
-    other_courier = user_details(courier2_token)
-    assert other_courier["id"] != assigned.courier_id
-    before_wallet = wallet(business1_token)
-    before_ledger = ledger(assigned.id, business1_token)
+    assert user_details(courier2_token)["id"] != assigned.courier_id
+    before = snapshot(assigned.id, wallet, business1_token)
 
-    response = courier_api.accept_delivery(assigned.id, courier2_token)
+    response = action(assigned.id, courier2_token)
 
     assert_api_error(response, status_code=403, code="forbidden", message="Not your delivery")
-    after_response = delivery_api.get_delivery(assigned.id, business1_token)
-    after = response_data(after_response)
+    owner_response = delivery_api.get_delivery(assigned.id, business1_token)
+    after = response_data(owner_response)
     assert after["status"] == DeliveryStage.ASSIGNED
     assert after["courier_id"] == assigned.courier_id
-    assert wallet(business1_token) == before_wallet
-    assert ledger(assigned.id, business1_token) == before_ledger
-    assert not (ledger(assigned.id, courier2_token))
-
-
-def test_other_courier_cannot_pickup_delivery(staged_delivery, wallet, user_details, business1_token, courier2_token):
-    assigned = staged_delivery(DeliveryStage.ASSIGNED)
-    other_courier = user_details(courier2_token)
-    assert other_courier["id"] != assigned.courier_id
-    before_wallet = wallet(business1_token)
-    before_ledger = ledger(assigned.id, business1_token)
-
-    response = courier_api.pickup_delivery(assigned.id, courier2_token)
-
-    assert_api_error(response, status_code=403, code="forbidden", message="Not your delivery")
-    after_response = delivery_api.get_delivery(assigned.id, business1_token)
-    after = response_data(after_response)
-    assert after["status"] == DeliveryStage.ASSIGNED
-    assert after["courier_id"] == assigned.courier_id
-    assert wallet(business1_token) == before_wallet
-    assert ledger(assigned.id, business1_token) == before_ledger
-    assert not (ledger(assigned.id, courier2_token))
-
-
-def test_other_courier_cannot_cancel_delivery(staged_delivery, wallet, user_details, business1_token, courier2_token):
-    assigned = staged_delivery(DeliveryStage.ASSIGNED)
-    other_courier = user_details(courier2_token)
-    assert other_courier["id"] != assigned.courier_id
-    before_wallet = wallet(business1_token)
-    before_ledger = ledger(assigned.id, business1_token)
-
-    response = courier_api.cancel_delivery(assigned.id, courier2_token)
-
-    assert_api_error(response, status_code=403, code="forbidden", message="Not your delivery")
-    after_response = delivery_api.get_delivery(assigned.id, business1_token)
-    after = response_data(after_response)
-    assert after["status"] == DeliveryStage.ASSIGNED
-    assert after["courier_id"] == assigned.courier_id
-    assert wallet(business1_token) == before_wallet
-    assert ledger(assigned.id, business1_token) == before_ledger
-    assert not (ledger(assigned.id, courier2_token))
+    assert snapshot(assigned.id, wallet, business1_token) == before
+    assert_ledger(assigned.id, courier2_token)
 
 
 def test_other_courier_cannot_complete_delivery_with_valid_code(
@@ -377,18 +279,17 @@ def test_other_courier_cannot_complete_delivery_with_valid_code(
     other_courier = user_details(courier2_token)
     assert other_courier["id"] != picked_up.courier_id
     code = delivery_code(picked_up.id, business1_token)
-    before_wallet = wallet(business1_token)
-    before_ledger = ledger(picked_up.id, business1_token)
+    before = snapshot(picked_up.id, wallet, business1_token)
 
     response = courier_api.deliver_delivery(picked_up.id, courier2_token, code=code)
 
+    assert_api_error(response, status_code=403, code="forbidden", message="Not your delivery")
     after_response = delivery_api.get_delivery(picked_up.id, business1_token)
     after = response_data(after_response)
     assert after["status"] == DeliveryStage.PICKED_UP
     assert after["courier_id"] == picked_up.courier_id
-    assert wallet(business1_token) == before_wallet
-    assert ledger(picked_up.id, business1_token) == before_ledger
-    assert not ledger(picked_up.id, courier2_token)
+    assert snapshot(picked_up.id, wallet, business1_token) == before
+    assert_ledger(picked_up.id, courier2_token)
 
 
 # webhooks
