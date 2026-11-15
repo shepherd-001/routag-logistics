@@ -9,12 +9,12 @@ def response_data(response, expected_code=200):
 
 
 def assert_api_error(
-    response,
-    *,
-    status_code: int | tuple[int, ...],
-    code: str,
-    message: str,
-    fields: list[str] | None = None,
+        response,
+        *,
+        status_code: int | tuple[int, ...],
+        code: str,
+        message: str,
+        fields: list[str] | None = None,
 ):
     assert_status_code(response, status_code)
     error = response.json().get("error")
