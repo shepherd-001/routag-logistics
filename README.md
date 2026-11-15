@@ -29,4 +29,4 @@ Use `npm run test:headed` to watch the browser. Failure screenshots and traces a
 
 ## AI assistance
 
-Codex helped author this project. Both scenarios were run in Chromium against the local assessment sandbox and passed.
+AI helped to structure this README layout
