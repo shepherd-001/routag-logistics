@@ -29,6 +29,4 @@ Use `npm run test:headed` to watch the browser. Failure screenshots and traces a
 
 ## AI assistance
 
-AI helped structure this README and implement the Faker data generator and courier acceptance test.
-
-Verification against the local sandbox passed for all three scenarios in Chromium, Firefox, and WebKit (9 tests total).
+AI helped structure this README.
