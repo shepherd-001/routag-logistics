@@ -2,7 +2,7 @@
 
 ## 1. A release is two days away and you have one day of testing time. How do you decide what to test?
 
-I’d review what changed with the developers and product owner, then prioritize by customer impact and likelihood of failure. For Routag, I’d start with a smoke test of the full delivery journey, from quote and creation through courier acceptance, pickup, and delivery. I’d spend most of the remaining time on wallet holds, settlement, and cancellation because mistakes there can cost businesses or couriers money. I’d also check that one business cannot access another’s deliveries.
+I’d review what changed with the developers and product owner, then prioritize by customer impact and likelihood of failure. For Routag, I’d start with a smoke test of the full delivery journey, from quote and creation through courier acceptance, pickup, and delivery. In my sandbox testing, a courier could mark an accepted package as delivered before recording pickup. I’d retest that sequence because it can trigger a payout while the package is still awaiting pickup. I’d spend most of the remaining time on wallet holds, payout, and cancellation because mistakes there can cost businesses or couriers money. I’d also check that one business cannot access another’s deliveries.
 
 I’d run existing automation early and use the results to guide focused manual testing. I’d reserve time to retest fixes and give the release owner a clear summary of what passed, which defects remain open, and which areas I couldn’t cover.
 
