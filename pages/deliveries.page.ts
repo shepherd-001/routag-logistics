@@ -26,9 +26,9 @@ export class DeliveriesPage {
     return this.page.getByTestId(`${field}-error`);
   }
 
-  rowForAddress(address: string) {
+  rowForId(id: string) {
     return this.rows.filter({
-      has: this.page.getByRole('cell', { name: address, exact: true }),
+      has: this.page.getByRole('cell', { name: id, exact: true }),
     });
   }
 
