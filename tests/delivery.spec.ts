@@ -5,13 +5,16 @@ import { DeliveryPage } from '../pages/delivery.page';
 import { LoginPage } from '../pages/login.page';
 import { DeliveryDataFactory } from '../utils/dataFactory/delivery-data.factory';
 
-const { BUSINESS_EMAIL, BUSINESS_PASSWORD,  COURIER_EMAIL, COURIER_PASSWORD } = process.env;
-if (!BUSINESS_EMAIL || !BUSINESS_PASSWORD || !COURIER_EMAIL || !COURIER_PASSWORD) {
-  throw new Error('Set all required environment variables in .env');
+function requiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value?.trim()) {
+    throw new Error('Missing environment variable ' + name + '. Set it in .env.');
+  }
+  return value;
 }
 
 test.beforeEach(async ({ page }) => {
-  await new LoginPage(page).login(BUSINESS_EMAIL, BUSINESS_PASSWORD);
+  await new LoginPage(page).login(requiredEnv('BUSINESS_EMAIL'), requiredEnv('BUSINESS_PASSWORD'));
   await expect(new DeliveryPage(page).formHeading).toBeVisible();
 });
 
@@ -21,12 +24,9 @@ test('a business creates and publishes a delivery', async ({ page }) => {
   const delivery_data = DeliveryDataFactory.createDeliveryData();
   await deliveryPage.createDelivery(delivery_data);
 
-  await expect(deliveryPage.successMessage).toBeVisible();
-  await expect(deliveryPage.successMessage).toHaveText(/^Delivery del_[a-z0-9]+ created\. Fee ₦/);
-
-  const id = (await deliveryPage.successMessage.innerText()).split(' ')[1];
+  const id = await deliveryPage.readCreatedDeliveryId();
   const row = deliveryPage.rowForId(id);
-  await expect(row.getByTestId('delivery-status')).toHaveText('pending');
+  await expect(deliveryPage.statusOf(id)).toHaveText('pending');
 
   const amount = (1500 + 200 * delivery_data.weightKg).toLocaleString('en-NG', {
     minimumFractionDigits: 2,
@@ -67,17 +67,15 @@ test('an empty delivery shows a validation error for every required field', asyn
 test('the dashboard shows assigned after a courier accepts the delivery', async ({ page, request }) => {
   const courierApi = new CourierDeliveryApi(request);
   const auth = new AuthApi(request);
-  const login = await auth.login(COURIER_EMAIL, COURIER_PASSWORD);
+  const login = await auth.login(requiredEnv('COURIER_EMAIL'), requiredEnv('COURIER_PASSWORD'));
   expect(login.ok(), `Courier login returned HTTP ${login.status()}`).toBe(true);
   const { token, user } = await login.json();
   expect(user.role).toBe('courier');
 
   const deliveryPage = new DeliveryPage(page);
   await deliveryPage.createDelivery(DeliveryDataFactory.createDeliveryData());
-  await expect(deliveryPage.successMessage).toHaveText(/^Delivery del_[a-z0-9]+ created\. Fee ₦/);
-
-  const id = (await deliveryPage.successMessage.innerText()).split(' ')[1];
-  const status = deliveryPage.rowForId(id).getByTestId('delivery-status');
+  const id = await deliveryPage.readCreatedDeliveryId();
+  const status = deliveryPage.statusOf(id);
   await expect(status).toHaveText('pending');
 
   const acceptance = await courierApi.acceptDelivery(id, token);

@@ -22,6 +22,20 @@ export class DeliveryPage {
     return this.page.getByTestId('delivery-row');
   }
 
+  async readCreatedDeliveryId(): Promise<string> {
+    await this.successMessage.waitFor();
+    const message = await this.successMessage.innerText();
+    const id = /^Delivery (del_[a-z0-9]+) created\. Fee ₦/.exec(message)?.[1];
+    if (!id) {
+      throw new Error('Success message did not contain a delivery ID: ' + JSON.stringify(message));
+    }
+    return id;
+  }
+
+  statusOf(id: string) {
+    return this.rowForId(id).getByTestId('delivery-status');
+  }
+
   fieldError(field: string) {
     return this.page.getByTestId(`${field}-error`);
   }
