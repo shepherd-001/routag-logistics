@@ -46,4 +46,9 @@ export class DeliveriesPage {
   async submit() {
     await this.page.getByRole('button', { name: 'Create and publish delivery' }).click();
   }
+
+  async createDelivery(delivery: Delivery) {
+    await this.fillDelivery(delivery);
+    await this.submit();
+  }
 }
