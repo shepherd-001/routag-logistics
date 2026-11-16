@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { Delivery } from '../../../pages/deliveries.page';
+import type { Delivery } from '../../pages/delivery.page';
 
 export class DeliveryDataFactory {
   static createDeliveryData(): Delivery {

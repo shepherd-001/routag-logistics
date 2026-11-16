@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { DeliveriesPage } from '../pages/deliveries.page';
+import { CourierDeliveryApi } from '../api_clients/courier-delivery.api';
+import { AuthApi } from '../api_clients/auth.api';
+import { DeliveryPage } from '../pages/delivery.page';
 import { LoginPage } from '../pages/login.page';
-import { DeliveryDataFactory } from './utils/dataFactory/delivery-data.factory';
+import { DeliveryDataFactory } from '../utils/dataFactory/delivery-data.factory';
 
 const { BUSINESS_EMAIL, BUSINESS_PASSWORD,  COURIER_EMAIL, COURIER_PASSWORD } = process.env;
 if (!BUSINESS_EMAIL || !BUSINESS_PASSWORD || !COURIER_EMAIL || !COURIER_PASSWORD) {
@@ -10,12 +12,12 @@ if (!BUSINESS_EMAIL || !BUSINESS_PASSWORD || !COURIER_EMAIL || !COURIER_PASSWORD
 
 test.beforeEach(async ({ page }) => {
   await new LoginPage(page).login(BUSINESS_EMAIL, BUSINESS_PASSWORD);
-  await expect(new DeliveriesPage(page).formHeading).toBeVisible();
+  await expect(new DeliveryPage(page).formHeading).toBeVisible();
 });
 
 
 test('a business creates and publishes a delivery', async ({ page }) => {
-  const deliveryPage = new DeliveriesPage(page);
+  const deliveryPage = new DeliveryPage(page);
   const delivery_data = DeliveryDataFactory.createDeliveryData();
   await deliveryPage.createDelivery(delivery_data);
 
@@ -39,9 +41,9 @@ test('a business creates and publishes a delivery', async ({ page }) => {
 
 
 test('an empty delivery shows a validation error for every required field', async ({ page }) => {
-  const deliveries = new DeliveriesPage(page);
+  const deliveryPage = new DeliveryPage(page);
 
-  await deliveries.submit();
+  await deliveryPage.submit();
 
   const errors = {
     'pickup-name': 'Pickup name is required',
@@ -55,27 +57,30 @@ test('an empty delivery shows a validation error for every required field', asyn
   };
 
   for (const [field, message] of Object.entries(errors)) {
-    await expect(deliveries.fieldError(field)).toBeVisible();
-    await expect(deliveries.fieldError(field)).toHaveText(message);
+    await expect(deliveryPage.fieldError(field)).toBeVisible();
+    await expect(deliveryPage.fieldError(field)).toHaveText(message);
   }
 
-  await expect(deliveries.successMessage).toBeHidden();
+  await expect(deliveryPage.successMessage).toBeHidden();
 });
-  
+
 test('the dashboard shows assigned after a courier accepts the delivery', async ({ page, request }) => {
-    const login = await request.post('/api/v1/auth/login', {
-      data: { email: COURIER_EMAIL, password: COURIER_PASSWORD },
-    });
-    expect(login.ok(), `Courier login returned HTTP ${login.status()}`).toBe(true);
-    const { token, user } = await login.json();
-    expect(user.role).toBe('courier');
-  
-    const deliveries = new DeliveriesPage(page);
-    const { id, row } = await createPublishedDelivery(deliveries);
-    const headers = { Authorization: `Bearer ${token}` };
-    const courierDelivery = `/api/v1/courier/deliveries/${id}`;
-    const acceptance = await request.post(`${courierDelivery}/accept`, { headers });
-    expect(acceptance.ok(), `Courier acceptance returned HTTP ${acceptance.status()}`).toBe(true);
-  
-    await expect(row.getByTestId('delivery-status')).toHaveText('assigned');
-  });
+  const courierApi = new CourierDeliveryApi(request);
+  const auth = new AuthApi(request);
+  const login = await auth.login(COURIER_EMAIL, COURIER_PASSWORD);
+  expect(login.ok(), `Courier login returned HTTP ${login.status()}`).toBe(true);
+  const { token, user } = await login.json();
+  expect(user.role).toBe('courier');
+
+  const deliveryPage = new DeliveryPage(page);
+  await deliveryPage.createDelivery(DeliveryDataFactory.createDeliveryData());
+  await expect(deliveryPage.successMessage).toHaveText(/^Delivery del_[a-z0-9]+ created\. Fee ₦/);
+
+  const id = (await deliveryPage.successMessage.innerText()).split(' ')[1];
+  const status = deliveryPage.rowForId(id).getByTestId('delivery-status');
+  await expect(status).toHaveText('pending');
+
+  const acceptance = await courierApi.acceptDelivery(id, token);
+  expect(acceptance.ok(), `Courier acceptance returned HTTP ${acceptance.status()}`).toBe(true);
+  await expect(status).toHaveText('assigned');
+});

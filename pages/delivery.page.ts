@@ -7,7 +7,7 @@ export type Delivery = {
   weightKg: number;
 };
 
-export class DeliveriesPage {
+export class DeliveryPage {
   constructor(private readonly page: Page) {}
 
   get formHeading() {
